@@ -83,3 +83,19 @@ def expense_category_chart(totals: pd.DataFrame) -> go.Figure:
 def income_category_chart(totals: pd.DataFrame) -> go.Figure:
     """Display category/total_income output as a horizontal bar chart."""
     return _category_chart(totals, "total_income", "Sources of income", INCOME_COLOR)
+
+
+def budget_actual_chart(comparison: pd.DataFrame) -> go.Figure:
+    """Plot precomputed targets and actuals; missing budgets remain absent bars."""
+    figure = go.Figure()
+    for column, label, color in (
+        ("budget", "Budget", INCOME_COLOR), ("actual", "Actual", EXPENSE_COLOR),
+    ):
+        figure.add_bar(
+            x=comparison["category"], y=comparison[column], name=label,
+            marker_color=color, customdata=comparison[["status"]].to_numpy(),
+            hovertemplate="%{x}<br>" + label + ": €%{y:,.2f}<br>%{customdata[0]}<extra></extra>",
+        )
+    figure.update_layout(barmode="group")
+    figure.update_yaxes(title="Amount (EUR)", tickprefix="€", tickformat=",.0f")
+    return _style(figure, "Budget vs actual expenses by category", comparison.empty)

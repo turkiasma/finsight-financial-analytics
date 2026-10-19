@@ -1,9 +1,10 @@
 # FinSight — Business Financial Analytics
 
 FinSight is a portfolio project for helping small businesses turn transaction
-CSV files into understandable financial information. **Phases 1–3 are
+CSV files into understandable financial information. **Phases 1–3.5 are
 implemented:** a fictional dataset, data loading/validation, and a reusable
-financial analytics engine, together with an interactive Streamlit dashboard.
+financial analytics engine, together with an interactive Streamlit dashboard
+and monthly budget comparisons.
 The optional AI assistant is planned for Phase 5 and is not implemented.
 
 ## Run the dashboard
@@ -38,6 +39,8 @@ required. This is a local application; it has not been deployed.
 - A transaction explorer with newest-first records and filtered CSV download.
 - Inclusive date-range selection, category selection, explorer type selection,
   reset, and helpful empty/error states.
+- Independent calendar-month Budget vs. Actual Expenses comparison, with
+  sample/custom budgets, variance cards, category statuses, and a grouped chart.
 
 The layout uses native Streamlit columns and full-width tables/charts. Narrow
 screens may require table scrolling. Chart colors distinguish income (teal),
@@ -59,8 +62,9 @@ Uploads are read in memory and are not written to the repository or a database.
 
 ### Filter and export behavior
 
-**Analysis scope = date range + categories.** This scope drives all KPI cards,
-charts, the monthly comparison, and Financial Highlights. Dates include both
+**Analysis scope = date range + categories.** This scope drives the original KPI
+cards, charts, monthly comparison, and Financial Highlights. The Budget vs.
+Actual section has independent controls. Dates include both
 endpoints, including a range containing only one date. The initial range covers
 all available dates and all categories are selected.
 
@@ -307,6 +311,123 @@ demonstration values, not claims about a real business.
 | Software | 1,135.47 |
 | Utilities | 963.08 |
 
+## Phase 3.5: Monthly Budget vs. Actual Expenses
+
+A **budget** is an independently planned spending target. **Actual** means cash
+paid in recorded Expense transactions for the same calendar month and category.
+Income transactions are excluded. Targets do not change the original financial
+KPIs or the recorded transactions.
+
+The section has its own month selector and expense-category selection. It uses
+the full transaction dataset for that calendar month, independently of all
+sidebar filters. For example, a sidebar range of January 10–15 does not prorate
+the January budget or restrict January's actual spending in this section.
+The main Reset filters button resets the sidebar, leaving these independent
+budget controls alone.
+
+### Budget CSV format and sample targets
+
+`data/sample_budgets.csv` contains **36 fictional spending targets**: all six
+supported expense categories for January–June 2026, in EUR. Targets were chosen
+independently of actual expenses. Rent (650) and salaries (4,200) reflect fixed
+monthly commitments; marketing (500–700), software (200–250), utilities (180–190),
+and supplies (250–350) reflect simple spending allowances. These values are not
+financial forecasts or recommendations.
+
+```csv
+month,category,budget_amount
+2026-01,Marketing,500.00
+2026-01,Software,200.00
+2026-01,Rent,650.00
+```
+
+The loader requires exactly these columns, real months in `YYYY-MM` format,
+supported expense categories, finite non-negative plain numeric amounts with
+at most two decimals, and unique `(month, category)` pairs. Sample amounts use
+exactly two decimals. Zero is valid. Missing values, negative amounts, invalid
+categories/months, duplicate targets, and malformed files are rejected with
+readable errors. No invalid rows are silently removed.
+
+The sample expense categories are Rent, Salaries, Marketing, Software, Utilities,
+and Supplies. Income categories cannot have expense budgets.
+
+### Selecting budgets
+
+The bundled transaction sample defaults to **Sample budget**. To use your own
+targets, select **Upload budget CSV** in the budget section and upload a matching
+UTF-8 CSV. Budget uploads remain in memory and are not saved to disk.
+
+Uploaded transactions default to **Upload budget CSV**, with no automatic sample
+budget applied. You can explicitly choose Sample budget if its fictional targets
+are relevant; the interface makes that choice clear. Replacing the transaction
+dataset resets the budget source/month/category controls and separates the file
+uploader state so a previous dataset's uploaded budget is not silently reused.
+Invalid budget files hide budget results while leaving the transaction dashboard
+and CSV export available.
+
+### Variance and missing-budget rules
+
+```text
+Variance (EUR) = Actual - Budget
+Variance (%)   = ((Actual - Budget) / Budget) * 100
+```
+
+- Positive variance: **Over budget**.
+- Negative variance: **Under budget**.
+- Zero variance: **On budget**.
+- No matching target: **No budget set**, with budget and both variances `N/A`.
+- A zero budget has undefined percentage variance (`N/A`), never infinity.
+  Zero actual against a zero budget is On budget; positive actual is Over budget.
+
+The comparison includes categories with budgets and no spending (zero recorded
+actual) and categories with spending but no budget. It never replaces a missing
+budget with zero. Categories with neither a target nor spending are omitted.
+The grouped chart leaves a missing Budget bar absent rather than plotting zero.
+
+Total Budget sums only explicit targets; Actual Expenses includes all selected
+spending. If any displayed category lacks a target, overall Budget Variance is
+`N/A` to avoid implying complete budget coverage. If there are no explicit
+targets, Total Budget is also `N/A`. Financial outputs use two decimals.
+
+January's fictional sample results:
+
+| Category | Budget (EUR) | Actual (EUR) | Variance (EUR) | Status |
+| --- | ---: | ---: | ---: | --- |
+| Marketing | 500.00 | 401.59 | -98.41 | Under budget |
+| Rent | 650.00 | 650.00 | 0.00 | On budget |
+| Salaries | 4,200.00 | 4,200.00 | 0.00 | On budget |
+| Software | 200.00 | 162.07 | -37.93 | Under budget |
+| Supplies | 250.00 | 0.00 | -250.00 | Under budget |
+| Utilities | 180.00 | 177.38 | -2.62 | Under budget |
+| **Total** | **5,980.00** | **5,591.04** | **-388.96** | **Under budget** |
+
+### Monthly comparison limitations
+
+Only months containing transaction records are offered in the UI. The calendar
+selector uses every available record for the selected month; it does not infer
+the start/end of activity from the first/last transaction date or compare an
+arbitrary partial date slice against a full budget. However, a CSV alone cannot
+prove that all records for that month were provided. Users must supply complete
+calendar-month records, not an unfinished month's extract. Zero actual means no
+recorded expenses, not proof of zero business spending. Currency is assumed EUR;
+no currency conversion, accounting profit calculation, or forecasting is added.
+
+Budget logic lives in `src/budgets.py`: `load_budgets()` reads and validates files,
+`validate_budgets()` checks a text DataFrame, `calculate_budget_comparison()` merges
+monthly targets and actuals, and `summarize_budget_comparison()` computes card
+totals without hiding missing coverage. `src/budget_dashboard.py` handles the new
+section's widgets and presentation; `budget_actual_chart()` in `src/charts.py`
+only visualizes those results. The existing transaction loader and analytics
+remain unchanged.
+
+To test manually, run `streamlit run app.py`, view January with sample budgets,
+then change the sidebar dates and confirm the budget result stays unchanged.
+Choose another budget month or a subset of expense categories. Upload a custom
+budget with a zero target and omit a category that has spending; confirm `N/A`
+percentages and the distinct statuses. Upload an invalid budget to confirm the
+error stays within this section. Switch to uploaded transactions and verify no
+sample budget is automatically applied.
+
 ## Financial assumptions and limitations
 
 Amounts record cash received or paid. `type` determines the direction of each
@@ -348,7 +469,7 @@ Run all checks:
 .venv/bin/python -m pytest -v
 ```
 
-The focused suite now includes **67 tests**: the original 23 analytics cases and
+The original suite includes **67 tests**: 23 analytics cases and
 44 dashboard cases. Phase 3 checks cover sample/upload selection, invalid uploads,
 inclusive dates, single dates, categories, type-only explorer filtering, KPI scope,
 empty results, loader-compatible CSV exports, chart values/empty figures, missing
@@ -357,6 +478,14 @@ rendering, reset, dataset replacement, invalid-file recovery, and incomplete dat
 selection (including scalar dates, empty selections, missing endpoints, and
 completion/reset after an incomplete range). Uploaded file objects are supplied in memory for those page tests;
 they do not automate the browser's file picker.
+
+Phase 3.5 adds 36 budget validation, calculation, and page integration tests,
+bringing the suite to **103 passing tests**,
+including zero/missing budgets, monthly filtering, exclusion of income, input
+preservation, independent filters, explicit budget selection for uploaded data,
+invalid-budget recovery, and chart values. Existing dashboard assertions identify
+the original KPI cards by label so the additional budget cards do not change
+what those regression tests verify.
 
 Both phase validation scripts pass, and the local Streamlit server has been
 checked for successful page and health responses. AppTest verifies rendering and

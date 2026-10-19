@@ -199,21 +199,28 @@ def app():
     return AppTest.from_file(APP_PATH, default_timeout=15).run()
 
 
+def main_metrics(page):
+    """Read the original analysis KPIs independently of the new budget cards."""
+    return [metric.value for metric in page.metric if metric.label in (
+        "Total Income", "Total Expenses", "Net Cash Flow",
+    )]
+
+
 def test_page_sample_render_type_scope_and_reset():
     page = app()
     assert not page.exception
-    original_metrics = [metric.value for metric in page.metric]
+    original_metrics = main_metrics(page)
     assert original_metrics == ["€117,542.02", "€36,013.80", "€81,528.22"]
     assert len(page.dataframe[-1].value) == 200
     page.multiselect(key="transaction_types").set_value(["Expense"]).run()
     assert not page.exception
-    assert [metric.value for metric in page.metric] == original_metrics
+    assert main_metrics(page) == original_metrics
     assert set(page.dataframe[-1].value["type"]) == {"Expense"}
     page.multiselect(key="categories").set_value(["Rent"]).run()
-    assert [metric.value for metric in page.metric] == ["€0.00", "€3,900.00", "€-3,900.00"]
+    assert main_metrics(page) == ["€0.00", "€3,900.00", "€-3,900.00"]
     page.button[0].click().run()
     assert not page.exception
-    assert [metric.value for metric in page.metric] == original_metrics
+    assert main_metrics(page) == original_metrics
     assert page.multiselect(key="transaction_types").value == ["Income", "Expense"]
     assert len(page.dataframe[-1].value) == 200
 
@@ -222,7 +229,7 @@ def test_page_empty_categories_and_incomplete_dates():
     page = app()
     page.multiselect(key="categories").set_value([]).run()
     assert not page.exception
-    assert [metric.value for metric in page.metric] == ["€0.00"] * 3
+    assert main_metrics(page) == ["€0.00"] * 3
     assert page.dataframe[-1].value.empty
     assert any("No transactions match" in info.value for info in page.info)
     page.date_input(key="date_range").set_value((date(2026, 1, 1),)).run()
@@ -272,7 +279,7 @@ def test_page_complete_date_range_after_incomplete_selection():
     selected_range = (date(2026, 2, 1), date(2026, 2, 28))
     page.date_input(key="date_range").set_value(selected_range).run()
     assert not page.exception
-    assert [metric.value for metric in page.metric] == ["€17,473.76", "€5,771.91", "€11,701.85"]
+    assert main_metrics(page) == ["€17,473.76", "€5,771.91", "€11,701.85"]
     assert len(page.dataframe[-1].value) == 32
     assert page.date_input(key="date_range").value == selected_range
     page.button[0].click().run()
@@ -294,13 +301,13 @@ def test_page_valid_upload_and_dataset_switch_resets_filters():
     with patch("streamlit.file_uploader", return_value=BytesIO(UPLOAD)):
         page.radio(key="dataset_selection").set_value("Upload CSV").run()
         assert not page.exception
-        assert [metric.value for metric in page.metric] == ["€250.00", "€100.50", "€149.50"]
+        assert main_metrics(page) == ["€250.00", "€100.50", "€149.50"]
         assert len(page.multiselect(key="categories").value) == 4
         assert any("Uploaded dataset" in caption.value for caption in page.caption)
         assert not any("Lumen Digital Studio" in caption.value for caption in page.caption)
         page.multiselect(key="transaction_types").set_value([]).run()
         assert page.dataframe[-1].value.empty
-        assert [metric.value for metric in page.metric] == ["€250.00", "€100.50", "€149.50"]
+        assert main_metrics(page) == ["€250.00", "€100.50", "€149.50"]
     page.radio(key="dataset_selection").set_value("Sample Dataset").run()
     assert not page.exception
     assert len(page.dataframe[-1].value) == 200
@@ -328,7 +335,7 @@ def test_page_single_date_upload():
         page.radio(key="dataset_selection").set_value("Upload CSV").run()
         assert not page.exception
         assert page.date_input[0].value == (date(2026, 6, 1), date(2026, 6, 1))
-        assert [metric.value for metric in page.metric] == ["€0.00", "€50.00", "€-50.00"]
+        assert main_metrics(page) == ["€0.00", "€50.00", "€-50.00"]
         page.button[0].click().run()
         assert not page.exception
         assert len(page.dataframe[-1].value) == 1
@@ -347,4 +354,4 @@ def test_replacing_upload_resets_scope_to_new_dataset():
     assert page.multiselect(key="categories").value == ["Service Revenue"]
     assert page.multiselect(key="transaction_types").value == ["Income", "Expense"]
     assert page.date_input[0].value == (date(2025, 12, 1), date(2025, 12, 1))
-    assert [metric.value for metric in page.metric] == ["€50.00", "€0.00", "€50.00"]
+    assert main_metrics(page) == ["€50.00", "€0.00", "€50.00"]

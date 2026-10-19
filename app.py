@@ -5,6 +5,8 @@ from hashlib import sha256
 
 import streamlit as st
 
+from src.budget_dashboard import render_budget_section
+
 from src.analytics import (
     calculate_expenses_by_category, calculate_income_by_category,
     calculate_monthly_changes, calculate_monthly_summary,
@@ -84,7 +86,7 @@ def main() -> None:
         dates = st.date_input("Date range", min_value=start, max_value=end,
                               key="date_range", format="YYYY-MM-DD")
         chosen_categories = st.multiselect("Categories", categories, key="categories")
-        st.caption("Dates and categories apply to KPIs, charts, highlights, and tables. No categories means no matching transactions.")
+        st.caption("Dates and categories apply to the main KPIs, charts, highlights, and tables. The budget section has independent controls. No categories means no matching transactions.")
         st.subheader("Explorer display")
         types = st.multiselect("Transaction types", ["Income", "Expense"], key="transaction_types")
         st.caption("Transaction types affect only the explorer and its CSV download.")
@@ -154,6 +156,8 @@ def main() -> None:
     for highlight in financial_highlights(changes, expenses):
         # Plain text prevents user-provided content being interpreted as markup.
         st.text(highlight)
+
+    render_budget_section(transactions, is_sample, identity)
 
     st.divider()
     st.subheader("Transaction Explorer")
