@@ -4,10 +4,17 @@ FinSight is a portfolio project for helping small businesses turn transaction
 CSV files into understandable financial information. **Phases 1–3.5 and 5 are
 implemented:** a fictional dataset, data loading/validation, and a reusable
 financial analytics engine, together with an interactive Streamlit dashboard
-and monthly budget comparisons. The optional AI financial assistant uses the
-already installed local **qwen3:8b** model through Ollama.
+and monthly budget comparisons. The optional AI financial assistant supports
+local **qwen3:8b** through Ollama and explicitly configured hosted Groq inference.
+Both use the same validated Python financial calculations.
 
 ## Run the dashboard
+
+Cloud deployment preparation is documented in
+[Deployment readiness — Step 1](docs/deployment-readiness.md) and
+[Groq integration — Step 2](docs/groq-integration.md). Local Ollama remains the
+default. Groq has passed mocked tests and 10 live checks using privately
+configured credentials. Public deployment remains a manual next step.
 
 From the repository root, after installing the existing requirements:
 
@@ -24,7 +31,7 @@ Or without activating the environment:
 
 Open the Local URL printed in the terminal (normally `http://localhost:8501`).
 Stop the server with Ctrl+C. No API keys, paid services, or model downloads are
-required. This is a local application; it has not been deployed.
+required for the default local mode. The application has not been deployed.
 
 ### Dashboard features
 
@@ -41,8 +48,8 @@ required. This is a local application; it has not been deployed.
   reset, and helpful empty/error states.
 - Independent calendar-month Budget vs. Actual Expenses comparison, with
   sample/custom budgets, variance cards, category statuses, and a grouped chart.
-- Local Qwen3 question interpretation with validated operations, Python-calculated
-  answers, verifiable result details, conversation history, and clear controls.
+- Local Ollama or configured Groq question interpretation with validated operations,
+  Python-calculated answers, a verification indicator, and conversation controls.
 
 The layout uses native Streamlit columns and full-width tables/charts. Narrow
 screens may require table scrolling. Chart colors distinguish income (teal),
@@ -61,6 +68,13 @@ never falls back to previous data. Correct the file and upload it again.
 
 With no upload selected, the dashboard displays instructions instead of results.
 Uploads are read in memory and are not written to the repository or a database.
+Transaction and budget uploads remain available with either AI provider and when
+AI is unconfigured. Uploaded transactions never automatically use sample budgets.
+For the public demonstration, do not upload confidential financial or personal
+information. Cloud CSV processing happens on Streamlit's servers. Groq receives
+the question and limited intent metadata, without attached records, descriptions,
+budgets, calculated amounts, or prior chat. Information typed into a question is
+sent as part of that question. See the Step 2 privacy and quota notes.
 
 ### Filter and export behavior
 
@@ -142,8 +156,9 @@ and type names are case-sensitive; surrounding field whitespace is trimmed.
 
 Python and Pandas provide data processing and analytics; Streamlit provides the
 dashboard, Plotly the interactive charts, and Pytest the focused automated tests.
-Phase 5 adds the official `ollama` client, `httpx` for its local transport, and
-Pydantic for strict request validation. Existing package pins remain unchanged.
+Phase 5 adds the official `ollama` client, `httpx` for transport, and Pydantic for
+strict request validation. Step 2 reuses `httpx` for Groq's documented REST API;
+no additional dependency or package-pin changes are needed.
 
 From the repository root on Linux/macOS:
 
@@ -436,8 +451,9 @@ sample budget is automatically applied.
 The **FinSight AI Assistant** understands self-contained questions using the
 existing local `qwen3:8b` model. Ollama is optional: connection failures, a missing
 model, or failed requests do not prevent dashboard analysis or CSV export.
-Only `qwen3:8b` is allowed; there are no fallback models, model downloads,
-external AI APIs, RAG pipelines, generated SQL, or autonomous tools.
+In local mode only `qwen3:8b` is allowed. There are no fallback models or model
+downloads. Hosted Groq is an explicit alternative documented below; the
+application has no RAG pipelines, generated SQL, or autonomous tools.
 
 ### Setup and configuration
 
@@ -458,17 +474,18 @@ Install the Python dependencies, then run FinSight:
 ```bash
 source .venv/bin/activate
 python -m pip install -r requirements.txt
+export AI_PROVIDER=ollama
 export OLLAMA_MODEL=qwen3:8b
 export OLLAMA_BASE_URL=http://localhost:11434
 streamlit run app.py
 ```
 
-Both environment variables are optional and default to the values shown.
+These environment variables are optional and default to the values shown.
 Configuration is centralized in `OllamaConfig` in `src/ai_assistant.py`. An
 `OLLAMA_MODEL` value other than `qwen3:8b` is rejected. The endpoint must be a
 loopback address (`localhost`, `127.0.0.1`, or `::1`), rather than an external AI
-service. Variables must be exported in the process environment; `.env` files
-are not automatically read.
+service. Settings can also be supplied through flat Streamlit Secrets; an explicit
+environment value takes precedence. `.env` files are not automatically read.
 
 Requests have a 60-second read timeout and a 3-second connection timeout. Model
 availability checks use a 2-second timeout and are cached for up to 30 seconds.
@@ -624,10 +641,14 @@ file-picker/download clicks remain manual checks. The model can misunderstand
 intent despite schema validation; it cannot change financial formulas or inject
 its own monetary values into the deterministic answer.
 
-For future public hosting, Streamlit Community Cloud cannot directly access
-Ollama running on your personal computer: its localhost refers to the cloud
-server. No hosting, public Ollama port, authentication service, or external
-endpoint has been configured in this phase.
+For public hosting, select `AI_PROVIDER=groq` explicitly and supply `GROQ_MODEL`
+and `GROQ_API_KEY` privately through Streamlit Secrets. The documented Qwen option
+is `qwen/qwen3.8-27b`; the exact model must be configured rather than inferred
+from the presence of a key. It uses JSON object mode and the existing strict
+Python schema validation. See [Step 2 configuration](docs/groq-integration.md).
+Missing settings disable only chat. There is no automatic provider fallback.
+Streamlit Community Cloud cannot reach Ollama on your personal computer through
+localhost. Do not expose that endpoint publicly. No deployment has been performed.
 
 Official API references: [Ollama structured outputs](https://docs.ollama.com/capabilities/structured-outputs),
 [thinking controls](https://docs.ollama.com/capabilities/thinking), and the
@@ -662,6 +683,7 @@ introduce different financial formulas:
 | `app.py` | Build the page, manage widget state, and connect data, analytics, and charts |
 | `.streamlit/config.toml` | Define the light workspace/navy sidebar theme and disable usage telemetry |
 | `src/ai_assistant.py` | Central local-model configuration, availability checks, and structured Qwen extraction |
+| `src/ai_providers.py` | Explicit provider configuration, Ollama adapter, and intent-only Groq REST adapter |
 | `src/ai_queries.py` | Strict request schema, query-scope rules, existing financial function routing, and deterministic answers |
 | `src/ai_dashboard.py` | Native chat widgets, cached connection indicator, and scope-isolated conversation state |
 
@@ -705,6 +727,19 @@ messages. Wording tests cover natural conclusions, budget yes/no answers, zero/m
 budgets, signed currency, calendar labels, exact month-comparison differences,
 unchanged internal values, and safely escaped labels. Existing Reset
 filters tests now target the button's stable key rather than its screen position.
+
+Deployment Step 2 adds 52 offline provider/privacy/cloud UI cases, bringing the
+suite to **223 passing tests on Python 3.14.7 and Python 3.12.15**. Both Phase 1/2
+scripts and dependency checks pass on both versions. All seven real local Qwen
+checks pass; a Python 3.12 Streamlit chat also succeeds with real local Qwen.
+The automated suite uses mocked Groq inference and does not load local Streamlit
+Secrets. Step 3 separately passed **10 live Groq checks** with
+`qwen/qwen3.8-27b`, including synthetic uploaded transactions/budgets and an
+unsupported-question refusal. Outgoing payloads were checked for absence of
+attached records and financial amounts. A real HTTP 429 stopped its request
+without automatic retries; the summary check passed after cooldown. Simulated
+rate-limit and timeout UI checks also passed. No credentials or raw provider
+responses were logged. Public hosting has not been configured or deployed.
 
 Both phase validation scripts pass, and the local Streamlit server has been
 checked for successful page and health responses. AppTest verifies rendering and

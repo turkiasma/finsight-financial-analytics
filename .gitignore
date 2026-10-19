@@ -1,4 +1,7 @@
 .venv/
+.venv*/
+venv/
+env/
 __pycache__/
 .pytest_cache/
 .env
@@ -13,3 +16,7 @@ models/
 *.pth
 *.onnx
 *.bin
+*.pem
+*.key
+credentials.json
+service-account*.json

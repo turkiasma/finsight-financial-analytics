@@ -1,4 +1,4 @@
-"""FinSight's local Streamlit dashboard: streamlit run app.py."""
+"""FinSight's Streamlit dashboard: streamlit run app.py."""
 
 from datetime import date
 from hashlib import sha256
@@ -43,6 +43,7 @@ def main() -> None:
     st.title("FinSight")
     st.subheader("Business Financial Analytics Dashboard")
     st.write("Transforming business transaction data into clear financial insights.")
+    st.caption("Public demonstration: do not upload confidential financial or personal information. In cloud deployments, CSVs are processed on Streamlit servers. Cloud AI receives only your question and limited intent metadata; uploaded records and calculated amounts are not attached.")
 
     with st.sidebar:
         st.header("FinSight")
@@ -179,7 +180,7 @@ def main() -> None:
     st.caption("Export includes only matching explorer records, in newest-first order, with YYYY-MM-DD dates and two-decimal EUR amounts.")
     render_ai_assistant(transactions, budgets, identity, dates[0], dates[1], chosen_categories)
     st.divider()
-    st.caption("FinSight · Cash-based analysis · EUR assumed · Local Qwen3 assistant · No forecasts or investment recommendations.")
+    st.caption("FinSight · Cash-based analysis · EUR assumed · Optional financial assistant · No forecasts or investment recommendations.")
 
 
 if __name__ == "__main__":
