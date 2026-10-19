@@ -16,7 +16,7 @@ from src.charts import budget_actual_chart
 SAMPLE_BUDGET_PATH = Path(__file__).resolve().parents[1] / "data" / "sample_budgets.csv"
 
 
-def render_budget_section(transactions: pd.DataFrame, is_sample: bool, dataset_identity: str) -> None:
+def render_budget_section(transactions: pd.DataFrame, is_sample: bool, dataset_identity: str) -> pd.DataFrame | None:
     """Render monthly controls using the full validated dataset, never analysis scope."""
     st.divider()
     st.subheader("Budget vs. Actual Expenses")
@@ -58,7 +58,7 @@ def render_budget_section(transactions: pd.DataFrame, is_sample: bool, dataset_i
     comparison = calculate_budget_comparison(transactions, budgets, month, categories)
     if comparison.empty:
         st.info("No budget or expense records match this month and category selection.")
-        return
+        return budgets
     totals = summarize_budget_comparison(comparison)
     for column, label, key in zip(st.columns(3),
                                    ["Total Budget", "Actual Expenses", "Budget Variance"],
@@ -80,3 +80,4 @@ def render_budget_section(transactions: pd.DataFrame, is_sample: bool, dataset_i
     }), hide_index=True, width="stretch")
     st.plotly_chart(budget_actual_chart(comparison), width="stretch", key="budget_actual")
     st.caption("A missing budget has no Budget bar; it is not a zero target. Actual means recorded cash paid, not a forecast or a full accounting expense measure.")
+    return budgets

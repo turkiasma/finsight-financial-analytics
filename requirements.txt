@@ -5,6 +5,7 @@ certifi==2026.10.18
 charset-normalizer==3.5.2
 click==8.5.0
 h11==0.16.0
+httpx==0.28.1
 idna==3.20
 iniconfig==2.3.1
 itsdangerous==2.2.0
@@ -14,6 +15,7 @@ jsonschema-specifications==2025.9.1
 MarkupSafe==3.0.4
 narwhals==2.27.1
 numpy==2.5.4
+ollama==0.6.3
 packaging==26.3
 pandas==3.0.6
 pillow==12.3.0
@@ -22,6 +24,7 @@ pluggy==1.7.0
 protobuf==7.36.2
 pyarrow==26.0.0
 pydeck==0.9.3
+pydantic==2.14.1
 Pygments==2.21.0
 pytest==9.1.1
 python-dateutil==2.9.0.post0

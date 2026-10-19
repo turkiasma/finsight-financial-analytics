@@ -1,11 +1,11 @@
 # FinSight — Business Financial Analytics
 
 FinSight is a portfolio project for helping small businesses turn transaction
-CSV files into understandable financial information. **Phases 1–3.5 are
+CSV files into understandable financial information. **Phases 1–3.5 and 5 are
 implemented:** a fictional dataset, data loading/validation, and a reusable
 financial analytics engine, together with an interactive Streamlit dashboard
-and monthly budget comparisons.
-The optional AI assistant is planned for Phase 5 and is not implemented.
+and monthly budget comparisons. The optional AI financial assistant uses the
+already installed local **qwen3:8b** model through Ollama.
 
 ## Run the dashboard
 
@@ -41,6 +41,8 @@ required. This is a local application; it has not been deployed.
   reset, and helpful empty/error states.
 - Independent calendar-month Budget vs. Actual Expenses comparison, with
   sample/custom budgets, variance cards, category statuses, and a grouped chart.
+- Local Qwen3 question interpretation with validated operations, Python-calculated
+  answers, verifiable result details, conversation history, and clear controls.
 
 The layout uses native Streamlit columns and full-width tables/charts. Narrow
 screens may require table scrolling. Chart colors distinguish income (teal),
@@ -140,7 +142,8 @@ and type names are case-sensitive; surrounding field whitespace is trimmed.
 
 Python and Pandas provide data processing and analytics; Streamlit provides the
 dashboard, Plotly the interactive charts, and Pytest the focused automated tests.
-All were already listed in `requirements.txt`; no dependencies were added.
+Phase 5 adds the official `ollama` client, `httpx` for its local transport, and
+Pydantic for strict request validation. Existing package pins remain unchanged.
 
 From the repository root on Linux/macOS:
 
@@ -428,6 +431,208 @@ percentages and the distinct statuses. Upload an invalid budget to confirm the
 error stays within this section. Switch to uploaded transactions and verify no
 sample budget is automatically applied.
 
+## Phase 5: Local AI Financial Assistant
+
+The **FinSight AI Assistant** understands self-contained questions using the
+existing local `qwen3:8b` model. Ollama is optional: connection failures, a missing
+model, or failed requests do not prevent dashboard analysis or CSV export.
+Only `qwen3:8b` is allowed; there are no fallback models, model downloads,
+external AI APIs, RAG pipelines, generated SQL, or autonomous tools.
+
+### Setup and configuration
+
+Ollama and `qwen3:8b` are already installed on the development computer. Confirm
+the existing installation without downloading anything:
+
+```bash
+ollama list
+ollama ps
+```
+
+If the local daemon is not running, start the existing installation in a separate
+terminal with `ollama serve` (or use its existing Linux service). Do not start a
+second daemon if the service is already running.
+
+Install the Python dependencies, then run FinSight:
+
+```bash
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+export OLLAMA_MODEL=qwen3:8b
+export OLLAMA_BASE_URL=http://localhost:11434
+streamlit run app.py
+```
+
+Both environment variables are optional and default to the values shown.
+Configuration is centralized in `OllamaConfig` in `src/ai_assistant.py`. An
+`OLLAMA_MODEL` value other than `qwen3:8b` is rejected. The endpoint must be a
+loopback address (`localhost`, `127.0.0.1`, or `::1`), rather than an external AI
+service. Variables must be exported in the process environment; `.env` files
+are not automatically read.
+
+Requests have a 60-second read timeout and a 3-second connection timeout. Model
+availability checks use a 2-second timeout and are cached for up to 30 seconds.
+Checking availability lists model metadata; it does not run inference or pull a
+model. A cached available status does not guarantee the next request will succeed;
+request-time failures are handled separately.
+
+### Architecture and numerical reliability
+
+```text
+Question → Qwen3 structured intent → strict Python validation
+         → existing analytics/budget functions → deterministic answer + result
+```
+
+Qwen3 receives the question, the available month identifiers, the allowed category
+names, and the request schema. It does not receive individual transaction
+descriptions or financial amounts. It selects an operation and parameters; it
+does not supply monetary results. The client requests schema-constrained JSON,
+`think=False`, temperature 0, and bounded output. Only `message.content` is parsed;
+reasoning content is neither displayed nor stored.
+
+Pydantic rejects missing/extra fields, unknown operations, incorrect types,
+invalid months, incompatible categories, and unsuitable parameters. Python also
+checks that a requested month exists in the loaded transactions and that any
+filter override is explicitly supported by the question's month/category text.
+Valid JSON alone is never treated as a trusted instruction. A fixed whitelist
+routes requests to existing financial functions, with no `eval`, `exec`, shell
+commands, or SQL execution.
+
+Answers use deterministic business-facing Markdown templates, with short
+conclusions and selective bold emphasis. Category labels are escaped and raw
+HTML is disabled. EUR amounts come from existing calculations and display two
+decimal places; negative cash flow uses `-€25.00`, while budget overruns and
+unspent targets use positive amounts. Budget percentages retain the budget
+engine's denominator and are not recalculated by the wording templates.
+Successfully calculated answers
+show a discreet **✓ Verified using financial data** caption, referring to Python's
+deterministic calculations. Errors and unsupported requests have no verification
+indicator. Structured results, including the interpreted operation, exact scope,
+and computed values, remain internal for application logic and tests; no raw JSON
+or calculation-detail panels are displayed in chat.
+Missing budgets stay distinct from zero targets, undefined percentages remain
+`N/A`, and net cash flow is never labelled accounting net profit.
+
+### Supported questions and exact scope rules
+
+Supported questions include overall income/expenses/cash flow, monthly summaries,
+peak income/expense months, income/expense category breakdowns, the largest expense
+category, main income sources, comparisons of two months, monthly budget/actual
+variances, and categories exceeding a budget.
+
+- **No named month or category:** use the sidebar analysis dates and categories.
+  The explorer's transaction-type filter does not affect the answer.
+- **Explicit month:** use all recorded transactions in that full calendar month,
+  replacing the sidebar date range. Existing sidebar categories still apply.
+  Two named months are allowed for comparisons of income, expenses, or cash flow.
+- **Explicit category:** use that exact supported category, replacing the sidebar
+  category selection. Existing sidebar dates still apply unless a month is named.
+- **Yearless month names:** resolve only when unambiguous in loaded data or the
+  question specifies a single shared year. Otherwise ask for an explicit year.
+- **Budget questions:** always require one explicit month and compare its full
+  recorded calendar month, without proration. Use the currently selected and
+  validated budget file from the budget section. When no category is named, use
+  the sidebar's selected expense categories. Budget-panel month/category controls
+  do not filter chat. Uploaded transactions never acquire sample budgets unless
+  the user explicitly selected that source in the budget section.
+- **Missing records:** reject absent transaction months and absent explicitly
+  requested categories rather than substitute another period/category. A month
+  missing records within selected categories is not invented as a zero-valued
+  month in a two-month comparison. Zero recorded expenses in an income-only
+  month still means no expenses recorded, not proof of no business spending.
+- **Conversation history:** retain at most twelve question/answer pairs for display.
+  Changes to the dataset, sidebar date/category scope, validated budget contents,
+  or endpoint clear the history. The Clear conversation button also resets it.
+  Previous messages are not sent to Qwen; every question must stand on its own.
+
+Examples:
+
+```text
+What is the total income?
+What were the total expenses in March 2026?
+Which expense category had the highest spending?
+What was our net cash flow in June 2026?
+Compare income between April and May 2026.
+Did we exceed our Marketing budget in February 2026?
+Which categories were over budget in March 2026?
+```
+
+Use exact category names for category-specific questions. Comparisons report
+the verified amounts for the two named months and their absolute change,
+calculated deterministically from those amounts solely for the answer wording.
+No new percentage-change or forecasting formula is inferred. Use sidebar date filters for arbitrary
+day-level date ranges. Forecasts, accounting profit/margins, investment advice,
+stock predictions, multiple named categories in one request, and contextual
+follow-ups such as “what about that month?” are unsupported.
+
+### Verification and troubleshooting
+
+The automated suite mocks Ollama and does not require a service, model, GPU, or
+network connection. Run the existing checks and complete suite:
+
+```bash
+.venv/bin/python scripts/validate_phase1.py
+.venv/bin/python scripts/validate_phase2.py
+.venv/bin/python -m pytest -v
+```
+
+To explicitly test the real installed Qwen model:
+
+```bash
+.venv/bin/python scripts/validate_ai.py
+```
+
+The live script checks seven natural-language questions, their interpreted scopes,
+Python results, and controlled refusal of an unsupported investment question.
+It never downloads a model. Live checks passed against Ollama 0.33.3 and the
+official Python client 0.6.3 with non-thinking structured outputs:
+
+| Question | Verified sample result |
+| --- | --- |
+| Total income | EUR 117,542.02 |
+| March 2026 expenses | EUR 6,938.08 |
+| Largest expense category | Salaries, EUR 25,200.00 |
+| June 2026 net cash flow | EUR 9,538.79 |
+| February Marketing budget | EUR 550.00 budget, EUR 437.30 actual, EUR -112.70 variance (-20.49%), Under budget |
+| Unsupported investment question | Refused without a financial answer |
+| April/May income | EUR 23,665.09 / EUR 22,669.47 |
+
+**Ollama unavailable:** check the existing daemon and `OLLAMA_BASE_URL`. The
+dashboard continues working. Availability indicators may lag changes by up to
+30 seconds; rerun after the cache expires.
+
+**Qwen3 model unavailable:** inspect `ollama list` for the exact `qwen3:8b` tag.
+The application does not silently switch models or install missing ones.
+
+**Timeout:** cold loading or limited CPU/GPU memory may make inference slow.
+The failed request generates no monetary answer; retry after the existing model
+has warmed up. No automatic download, fallback, or unbounded retry occurs.
+
+**Invalid request or scope mismatch:** rephrase with explicit month/year and an
+exact supported category. Intent extraction can still misunderstand natural
+language; check the question's scope against the documented filter rules. Invalid structured requests
+are rejected rather than repaired into guessed financial values.
+
+**Incompatible API options:** the tested versions support `think=False` and a JSON
+schema. An API rejecting those options produces a controlled error asking you to
+check versions; FinSight does not fall back to unconstrained text generation.
+The `/no_think` instruction also appears in the extraction prompt.
+
+The network boundary was also tested with an unreachable local endpoint: only
+chat was disabled and the dashboard still rendered. Browser visual layout and
+file-picker/download clicks remain manual checks. The model can misunderstand
+intent despite schema validation; it cannot change financial formulas or inject
+its own monetary values into the deterministic answer.
+
+For future public hosting, Streamlit Community Cloud cannot directly access
+Ollama running on your personal computer: its localhost refers to the cloud
+server. No hosting, public Ollama port, authentication service, or external
+endpoint has been configured in this phase.
+
+Official API references: [Ollama structured outputs](https://docs.ollama.com/capabilities/structured-outputs),
+[thinking controls](https://docs.ollama.com/capabilities/thinking), and the
+[official Python client](https://github.com/ollama/ollama-python).
+
 ## Financial assumptions and limitations
 
 Amounts record cash received or paid. `type` determines the direction of each
@@ -456,6 +661,9 @@ introduce different financial formulas:
 | `src/charts.py` | Turn already aggregated results into Plotly figures, without financial aggregation |
 | `app.py` | Build the page, manage widget state, and connect data, analytics, and charts |
 | `.streamlit/config.toml` | Define the light workspace/navy sidebar theme and disable usage telemetry |
+| `src/ai_assistant.py` | Central local-model configuration, availability checks, and structured Qwen extraction |
+| `src/ai_queries.py` | Strict request schema, query-scope rules, existing financial function routing, and deterministic answers |
+| `src/ai_dashboard.py` | Native chat widgets, cached connection indicator, and scope-isolated conversation state |
 
 The cash flow chart inserts blank plotting positions for absent calendar months
 so it does not join a line through missing activity. It does not invent zero
@@ -480,12 +688,23 @@ completion/reset after an incomplete range). Uploaded file objects are supplied 
 they do not automate the browser's file picker.
 
 Phase 3.5 adds 36 budget validation, calculation, and page integration tests,
-bringing the suite to **103 passing tests**,
+bringing the pre-AI suite to **103 tests**,
 including zero/missing budgets, monthly filtering, exclusion of income, input
 preservation, independent filters, explicit budget selection for uploaded data,
 invalid-budget recovery, and chart values. Existing dashboard assertions identify
 the original KPI cards by label so the additional budget cards do not change
 what those regression tests verify.
+
+Phase 5 adds 68 mocked-model, wording, and query-routing tests (171 tests total), covering
+schema/type validation, Qwen request settings, model failures, manually verified
+financial/budget answers, missing data, zero budgets, filters, safe routing,
+conversation isolation, and offline/online chat presentation. Presentation checks
+cover the verification caption, internal result preservation, absence of visible
+JSON/detail panels, successful history rerendering, and unverified error/refusal
+messages. Wording tests cover natural conclusions, budget yes/no answers, zero/missing
+budgets, signed currency, calendar labels, exact month-comparison differences,
+unchanged internal values, and safely escaped labels. Existing Reset
+filters tests now target the button's stable key rather than its screen position.
 
 Both phase validation scripts pass, and the local Streamlit server has been
 checked for successful page and health responses. AppTest verifies rendering and
@@ -499,10 +718,9 @@ CSV to see the validation message and confirm prior results disappear.
 
 ## Planned phases and inspiration
 
-Phase 4 will broaden testing and documentation. Phase 5 will add optional local
-Qwen/Ollama questions grounded in verified calculations. No Ollama, Qwen, AI chat,
-RAG, or model integration is implemented. Phase 3 does not add predictions or
-investment recommendations.
+Phase 4 can broaden testing and documentation separately. Phase 5 now provides
+local Qwen3 intent extraction grounded in existing calculations. There is no
+RAG, autonomous agent, forecasting, or investment-recommendation functionality.
 
 Architectural inspiration:
 [TasniaNitu/finance-ai-assistant](https://github.com/TasniaNitu/finance-ai-assistant)

@@ -6,6 +6,7 @@ from hashlib import sha256
 import streamlit as st
 
 from src.budget_dashboard import render_budget_section
+from src.ai_dashboard import render_ai_assistant
 
 from src.analytics import (
     calculate_expenses_by_category, calculate_income_by_category,
@@ -82,7 +83,8 @@ def main() -> None:
     with st.sidebar:
         st.divider()
         st.subheader("Analysis scope")
-        st.button("Reset filters", on_click=reset_filters, args=(start, end, categories), width="stretch")
+        st.button("Reset filters", key="reset_filters", on_click=reset_filters,
+                  args=(start, end, categories), width="stretch")
         dates = st.date_input("Date range", min_value=start, max_value=end,
                               key="date_range", format="YYYY-MM-DD")
         chosen_categories = st.multiselect("Categories", categories, key="categories")
@@ -157,7 +159,7 @@ def main() -> None:
         # Plain text prevents user-provided content being interpreted as markup.
         st.text(highlight)
 
-    render_budget_section(transactions, is_sample, identity)
+    budgets = render_budget_section(transactions, is_sample, identity)
 
     st.divider()
     st.subheader("Transaction Explorer")
@@ -175,8 +177,9 @@ def main() -> None:
                        file_name="finsight_filtered_transactions.csv", mime="text/csv",
                        disabled=explorer.empty, on_click="ignore", type="primary")
     st.caption("Export includes only matching explorer records, in newest-first order, with YYYY-MM-DD dates and two-decimal EUR amounts.")
+    render_ai_assistant(transactions, budgets, identity, dates[0], dates[1], chosen_categories)
     st.divider()
-    st.caption("FinSight · Cash-based analysis · EUR assumed · No forecasts or investment recommendations. AI assistant planned for Phase 5.")
+    st.caption("FinSight · Cash-based analysis · EUR assumed · Local Qwen3 assistant · No forecasts or investment recommendations.")
 
 
 if __name__ == "__main__":

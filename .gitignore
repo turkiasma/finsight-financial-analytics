@@ -4,3 +4,12 @@ __pycache__/
 .env
 *.pyc
 .streamlit/secrets.toml
+.env.*
+.ollama/
+models/
+*.gguf
+*.safetensors
+*.pt
+*.pth
+*.onnx
+*.bin

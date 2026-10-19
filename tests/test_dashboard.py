@@ -218,7 +218,7 @@ def test_page_sample_render_type_scope_and_reset():
     assert set(page.dataframe[-1].value["type"]) == {"Expense"}
     page.multiselect(key="categories").set_value(["Rent"]).run()
     assert main_metrics(page) == ["€0.00", "€3,900.00", "€-3,900.00"]
-    page.button[0].click().run()
+    page.button(key="reset_filters").click().run()
     assert not page.exception
     assert main_metrics(page) == original_metrics
     assert page.multiselect(key="transaction_types").value == ["Income", "Expense"]
@@ -282,7 +282,7 @@ def test_page_complete_date_range_after_incomplete_selection():
     assert main_metrics(page) == ["€17,473.76", "€5,771.91", "€11,701.85"]
     assert len(page.dataframe[-1].value) == 32
     assert page.date_input(key="date_range").value == selected_range
-    page.button[0].click().run()
+    page.button(key="reset_filters").click().run()
     assert not page.exception
     assert len(page.dataframe[-1].value) == 200
 
@@ -336,7 +336,7 @@ def test_page_single_date_upload():
         assert not page.exception
         assert page.date_input[0].value == (date(2026, 6, 1), date(2026, 6, 1))
         assert main_metrics(page) == ["€0.00", "€50.00", "€-50.00"]
-        page.button[0].click().run()
+        page.button(key="reset_filters").click().run()
         assert not page.exception
         assert len(page.dataframe[-1].value) == 1
 
