@@ -1,10 +1,94 @@
 # FinSight — Business Financial Analytics
 
 FinSight is a portfolio project for helping small businesses turn transaction
-CSV files into understandable financial information. **Phases 1 and 2 are
+CSV files into understandable financial information. **Phases 1–3 are
 implemented:** a fictional dataset, data loading/validation, and a reusable
-financial analytics engine. The Streamlit dashboard and AI assistant are future
-work.
+financial analytics engine, together with an interactive Streamlit dashboard.
+The optional AI assistant is planned for Phase 5 and is not implemented.
+
+## Run the dashboard
+
+From the repository root, after installing the existing requirements:
+
+```bash
+source .venv/bin/activate
+streamlit run app.py
+```
+
+Or without activating the environment:
+
+```bash
+.venv/bin/python -m streamlit run app.py
+```
+
+Open the Local URL printed in the terminal (normally `http://localhost:8501`).
+Stop the server with Ctrl+C. No API keys, paid services, or model downloads are
+required. This is a local application; it has not been deployed.
+
+### Dashboard features
+
+- A light main workspace, navy sidebar, and consistent EUR formatting.
+- Sample Dataset and Upload CSV modes, with validation before any calculation.
+- Total Income, Total Expenses, and Net Cash Flow cards.
+- Grouped monthly income/expense bars and a monthly net cash flow line chart.
+- Expense and income category charts, ordered highest first.
+- Monthly comparison table with percentage changes; undefined values show `N/A`.
+- Financial Highlights based on the verified analytics outputs: peak income and
+  expense months, largest expense category, and the latest income comparison.
+- A transaction explorer with newest-first records and filtered CSV download.
+- Inclusive date-range selection, category selection, explorer type selection,
+  reset, and helpful empty/error states.
+
+The layout uses native Streamlit columns and full-width tables/charts. Narrow
+screens may require table scrolling. Chart colors distinguish income (teal),
+expenses (orange), and net cash flow (blue); legends and hover labels also identify
+the series without relying on color alone.
+
+### Sample data versus uploaded data
+
+The default dataset is **Lumen Digital Studio**, containing fictional business
+transactions. Upload CSV mode uses a neutral **Uploaded dataset** label; it does
+not assume the uploaded records belong to that fictional company or are synthetic.
+Upload a UTF-8 `.csv` with the exact five-column schema and supported categories
+documented below. All amounts are assumed to be EUR. The existing strict loader
+validates the whole file. An invalid file displays an error, hides results, and
+never falls back to previous data. Correct the file and upload it again.
+
+With no upload selected, the dashboard displays instructions instead of results.
+Uploads are read in memory and are not written to the repository or a database.
+
+### Filter and export behavior
+
+**Analysis scope = date range + categories.** This scope drives all KPI cards,
+charts, the monthly comparison, and Financial Highlights. Dates include both
+endpoints, including a range containing only one date. The initial range covers
+all available dates and all categories are selected.
+
+**Explorer scope = analysis scope + transaction types.** Selecting only Expense
+in the explorer leaves the Income KPI and charts intact. Selecting only expense
+categories in the analysis scope, however, naturally produces zero income.
+Category options always come from the currently selected dataset. Clearing all
+categories yields an empty analysis. Clearing all transaction types yields an
+empty explorer while preserving the analysis.
+
+**Reset filters** restores the full date range, all available categories, and
+both types. Switching datasets or replacing an upload with different contents
+also resets filters to the new dataset's defaults. Resetting filters keeps the
+selected data source.
+
+**Download CSV** exports exactly the matching explorer records using the original
+lowercase column names, dates in `YYYY-MM-DD`, two-decimal amounts, UTF-8 encoding,
+and no index. The exported file can be loaded again by FinSight. It is ordered
+newest first; interactive table sorting changes the on-screen order but does not
+change export order or the exported set of records. Download is disabled when
+the explorer has no matching rows.
+
+Monthly comparisons follow the Phase 2 calendar-gap and zero-denominator rules.
+A partial date range can produce partial-month totals: no adjustment or projection
+is made. Highlights describe the selected scope, with the earliest month used
+for tied peak totals and alphabetical category order for tied expense totals.
+If the latest months are not consecutive or previous income is zero, the latest
+income comparison is explicitly unavailable. No highlights are AI-generated.
 
 ## Phase 1 dataset
 
@@ -50,9 +134,9 @@ and type names are case-sensitive; surrounding field whitespace is trimmed.
 
 ## Setup and validation
 
-Python and Pandas provide the Phase 1 and 2 functionality; Pytest verifies the
-analytics. The existing `requirements.txt` also lists dependencies intended for
-later phases, including Streamlit and Plotly. No new dependencies were added.
+Python and Pandas provide data processing and analytics; Streamlit provides the
+dashboard, Plotly the interactive charts, and Pytest the focused automated tests.
+All were already listed in `requirements.txt`; no dependencies were added.
 
 From the repository root on Linux/macOS:
 
@@ -86,7 +170,7 @@ Phase 1 validation passed.
 The script checks the actual sample and then tries twelve deliberately invalid
 inputs. It is a focused Phase 1 smoke check, not the full Phase 4 Pytest suite.
 It does not modify the CSV. No API keys, external APIs, or paid services are needed.
-The empty `app.py` is not yet a runnable dashboard.
+The dashboard run commands are documented above.
 
 ## How the loader works
 
@@ -238,11 +322,58 @@ the truth of a description. New categories require updating `CATEGORY_TYPES`.
 The project uses synthetic business data and assumes EUR throughout. It does
 not make financial predictions or investment recommendations.
 
+## Phase 3 architecture and verification
+
+The application separates responsibilities so the interface cannot quietly
+introduce different financial formulas:
+
+| File | Responsibility |
+| --- | --- |
+| `src/data_loader.py` | Read and validate CSV transactions; unchanged in Phase 3 |
+| `src/analytics.py` | Calculate all totals, monthly summaries, and category aggregations; unchanged in Phase 3 |
+| `src/dashboard.py` | Select datasets, filter scopes, serialize CSV exports, format comparisons, and describe analytics outputs |
+| `src/charts.py` | Turn already aggregated results into Plotly figures, without financial aggregation |
+| `app.py` | Build the page, manage widget state, and connect data, analytics, and charts |
+| `.streamlit/config.toml` | Define the light workspace/navy sidebar theme and disable usage telemetry |
+
+The cash flow chart inserts blank plotting positions for absent calendar months
+so it does not join a line through missing activity. It does not invent zero
+values or change the analytics.
+
+Run all checks:
+
+```bash
+.venv/bin/python scripts/validate_phase1.py
+.venv/bin/python scripts/validate_phase2.py
+.venv/bin/python -m pytest -v
+```
+
+The focused suite now includes **67 tests**: the original 23 analytics cases and
+44 dashboard cases. Phase 3 checks cover sample/upload selection, invalid uploads,
+inclusive dates, single dates, categories, type-only explorer filtering, KPI scope,
+empty results, loader-compatible CSV exports, chart values/empty figures, missing
+chart months, and presentation/highlights. Native Streamlit `AppTest` also checks
+rendering, reset, dataset replacement, invalid-file recovery, and incomplete date
+selection (including scalar dates, empty selections, missing endpoints, and
+completion/reset after an incomplete range). Uploaded file objects are supplied in memory for those page tests;
+they do not automate the browser's file picker.
+
+Both phase validation scripts pass, and the local Streamlit server has been
+checked for successful page and health responses. AppTest verifies rendering and
+interactions without a browser; visual layout, mobile behavior, file picker, and
+browser download clicks still need a manual browser check.
+
+For a quick manual demonstration: open the sample, choose Expense in transaction
+types and confirm KPIs remain unchanged, choose Rent in categories, reset filters,
+upload a valid CSV, then download and reopen the filtered export. Try an invalid
+CSV to see the validation message and confirm prior results disappear.
+
 ## Planned phases and inspiration
 
-Later phases will add an interactive Streamlit and Plotly dashboard, a broader
-Pytest suite, and optional local Qwen/Ollama questions grounded in verified
-calculations. The dashboard, charts, and AI assistant are not implemented yet.
+Phase 4 will broaden testing and documentation. Phase 5 will add optional local
+Qwen/Ollama questions grounded in verified calculations. No Ollama, Qwen, AI chat,
+RAG, or model integration is implemented. Phase 3 does not add predictions or
+investment recommendations.
 
 Architectural inspiration:
 [TasniaNitu/finance-ai-assistant](https://github.com/TasniaNitu/finance-ai-assistant)
