@@ -8,6 +8,11 @@ and monthly budget comparisons. The optional AI financial assistant supports
 local **qwen3:8b** through Ollama and explicitly configured hosted Groq inference.
 Both use the same validated Python financial calculations.
 
+<img width="1520" height="1096" alt="financial-dashboard" src="https://github.com/user-attachments/assets/70ec546c-e4cf-44c6-8c0c-0a8d1843e601" />
+<img width="1220" height="1290" alt="budget-vs-actual" src="https://github.com/user-attachments/assets/0ce92a41-e725-468a-8de7-afb6ad1162f9" />
+<img width="1220" height="774" alt="ai-financial-assistant" src="https://github.com/user-attachments/assets/c1e84795-ff37-40e2-89ea-215b68c52296" />
+
+
 ## Run the dashboard
 
 Cloud deployment preparation is documented in
